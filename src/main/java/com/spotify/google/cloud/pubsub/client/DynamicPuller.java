@@ -52,17 +52,14 @@ public class DynamicPuller extends AbstractPuller {
     if (this.outstandingRequests() < maxConcurrency &&
         outstandingMessages.get()-batchSize < maxOutstandingMessages) {
       pullRateCounter.addPoint(1);
-      outstandingMessagesPrePull = outstandingMessages();
       pullBatch(false);
       scheduleNextPull();
     }
   }
 
   private void scheduleNextPull() {
-    final long msgsReceived = messagesPulled.getAndSet(0);
-    final long msgsAckedSinceLastPull = outstandingMessagesPrePull + msgsReceived - outstandingMessages();
-    double pullSpeed = pullSpeedCounter.addPointAndGet(msgsReceived);
-    double ackSpeed = ackSpeedCounter.addPointAndGet(msgsAckedSinceLastPull);
+    double pullSpeed = pullSpeedCounter.getCurrSpeed();
+    double ackSpeed = ackSpeedCounter.getCurrSpeed();
     double pullToAckRatio = pullSpeed / ackSpeed;
 
     adjustPullInterval(pullToAckRatio);
@@ -97,6 +94,16 @@ public class DynamicPuller extends AbstractPuller {
     if (outstandingMessages()==0 || pullSpeedCounter.getCurrNormalisedSpeed()==0.0) {
       pull();
     }
+  }
+
+  @Override
+  protected void updatePullingSpeed(int amount) {
+    pullSpeedCounter.addPoint(amount);
+  }
+
+  @Override
+  protected void updateAckingSpeed(int amount) {
+    ackSpeedCounter.addPoint(amount);
   }
 
   public long minPullIntervalMillis() {

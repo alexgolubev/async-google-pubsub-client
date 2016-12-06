@@ -108,6 +108,7 @@ public abstract class AbstractPuller implements Closeable {
           // Add entire batch to outstanding message count
           outstandingMessages.addAndGet(messages.size());
           messagesPulled.addAndGet(messages.size());
+          updatePullingSpeed(messages.size());
 
           // Call handler for each received message
           for (final ReceivedMessage message : messages) {
@@ -130,7 +131,10 @@ public abstract class AbstractPuller implements Closeable {
             handlerFuture.whenComplete((ignore, throwable) -> outstandingMessages.decrementAndGet());
 
             // Ack when the message handling successfully completes
-            handlerFuture.thenAccept(acker::acknowledge).exceptionally(throwable -> {
+            handlerFuture.thenAccept(ack -> {
+              acker.acknowledge(ack);
+              updateAckingSpeed(1);
+            }).exceptionally(throwable -> {
               if (!(throwable instanceof CancellationException)) {
                 AbstractPuller.log.error("Acking pubsub threw exception", throwable);
               }
@@ -139,6 +143,12 @@ public abstract class AbstractPuller implements Closeable {
           }
         });
   }
+
+  // The following functions are supposed to be overwritten by the subclasses
+  // that need to keep track of the avg pulling and acking speeds
+  protected void updatePullingSpeed(int amount) {}
+
+  protected void updateAckingSpeed(int amount) {}
 
   @Override
   public void close() throws IOException {
