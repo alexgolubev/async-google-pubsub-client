@@ -141,7 +141,7 @@ public class AckerTest {
         .queueSize(100)
         .build();
 
-    // Saturate concurrency with two id's
+    // Saturate maxConcurrency with two id's
     acker.acknowledge("a0");
     final Request ra0 = requestQueue.take();
 

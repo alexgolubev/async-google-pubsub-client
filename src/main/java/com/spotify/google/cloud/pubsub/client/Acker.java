@@ -220,7 +220,7 @@ public class Acker implements Closeable {
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Acker} is closed.
      *
-     * <p>Note: The client should be configured to at least allow as many connections as the concurrency level of this
+     * <p>Note: The client should be configured to at least allow as many connections as the maxConcurrency level of this
      * {@link Acker}.</p>
      */
     public Builder pubsub(final Pubsub pubsub) {
@@ -245,7 +245,7 @@ public class Acker implements Closeable {
     }
 
     /**
-     * Set the Google Cloud Pub/Sub request concurrency level. Default is {@code 64}.
+     * Set the Google Cloud Pub/Sub request maxConcurrency level. Default is {@code 64}.
      */
     public Builder concurrency(final int concurrency) {
       this.concurrency = concurrency;
@@ -261,7 +261,7 @@ public class Acker implements Closeable {
     }
 
     /**
-     * Set the ack queue size. Default is {@code batchSize * concurrency * 10}.
+     * Set the ack queue size. Default is {@code batchSize * maxConcurrency * 10}.
      */
     public Builder queueSize(final Integer queueSize) {
       this.queueSize = queueSize;

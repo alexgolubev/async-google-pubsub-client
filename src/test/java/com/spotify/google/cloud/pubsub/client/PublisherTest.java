@@ -334,7 +334,7 @@ public class PublisherTest {
         .queueSize(1)
         .build();
 
-    // Send one message to saturate the concurrency (queue size == 0)
+    // Send one message to saturate the maxConcurrency (queue size == 0)
     final CompletableFuture<String> f0 = publisher.publish("t", m0);
     verify(pubsub, timeout(1000)).publish(eq("test"), eq("t"), eq(singletonList(m0)));
 
@@ -372,7 +372,7 @@ public class PublisherTest {
         .queueSize(100)
         .build();
 
-    // Saturate concurrency with two messages
+    // Saturate maxConcurrency with two messages
     final Message m0a = Message.of("0a");
     final CompletableFuture<String> f0a = publisher.publish("t", m0a);
     final Request r0a = t.take();

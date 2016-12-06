@@ -19,6 +19,7 @@ package com.spotify.google.cloud.pubsub.client.integration;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.services.pubsub.PubsubScopes;
 
+import com.spotify.google.cloud.pubsub.client.AbstractPuller;
 import com.spotify.google.cloud.pubsub.client.Message;
 import com.spotify.google.cloud.pubsub.client.Pubsub;
 import com.spotify.google.cloud.pubsub.client.Puller;
@@ -99,7 +100,7 @@ public class PullerBenchmark {
     }
 
     @Override
-    public CompletionStage<String> handleMessage(final Puller puller, final String subscription,
+    public CompletionStage<String> handleMessage(final AbstractPuller puller, final String subscription,
                                                  final Message message, final String ackId) {
       receives.inc(0);
       return CompletableFuture.completedFuture(ackId);

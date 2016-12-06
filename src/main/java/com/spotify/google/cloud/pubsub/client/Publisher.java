@@ -110,13 +110,13 @@ public class Publisher implements Closeable {
     }
 
     /**
-     * Called when a topic is enqueued as pending for future batch sending due to the publisher hitting the concurrency
+     * Called when a topic is enqueued as pending for future batch sending due to the publisher hitting the maxConcurrency
      * limit.
      *
      * @param publisher   The {@link Publisher}
      * @param topic       The topic.
      * @param outstanding The current number of outstanding batch requests to Google Cloud Pub/Sub.
-     * @param concurrency The configured concurrency limit.
+     * @param concurrency The configured maxConcurrency limit.
      */
     void topicPending(Publisher publisher, String topic, int outstanding, int concurrency);
   }
@@ -342,7 +342,7 @@ public class Publisher implements Closeable {
     }
 
     /**
-     * Enqueue this topic for batch sending. If the request concurrency level is below the limit, send immediately.
+     * Enqueue this topic for batch sending. If the request maxConcurrency level is below the limit, send immediately.
      */
     private void enqueueSend() {
 
@@ -487,7 +487,7 @@ public class Publisher implements Closeable {
     /**
      * Set the {@link Pubsub} client to use.
      *
-     * <p>Note: The client should be configured to at least allow as many connections as the concurrency level of this
+     * <p>Note: The client should be configured to at least allow as many connections as the maxConcurrency level of this
      * {@link Publisher}.</p>
      */
     public Builder pubsub(final Pubsub pubsub) {
@@ -512,7 +512,7 @@ public class Publisher implements Closeable {
     }
 
     /**
-     * Set the per-topic queue size. Default is {@code batchSize * concurrency * 10}.
+     * Set the per-topic queue size. Default is {@code batchSize * maxConcurrency * 10}.
      */
     public Builder queueSize(final Integer queueSize) {
       this.queueSize = queueSize;
@@ -520,7 +520,7 @@ public class Publisher implements Closeable {
     }
 
     /**
-     * Set the Google Cloud Pub/Sub request concurrency level. Default is {@code 64}.
+     * Set the Google Cloud Pub/Sub request maxConcurrency level. Default is {@code 64}.
      */
     public Builder concurrency(final int concurrency) {
       this.concurrency = concurrency;

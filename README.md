@@ -12,7 +12,7 @@ A low level Pub/Sub client and a concurrent per-topic batching Publisher.
 
 The client uses async-http-client with the Netty provider for making efficient and async HTTP requests to the Google Cloud Pub/Sub api. 
 
-The publisher is implemented on top of the async Pub/Sub client and concurrently gathers individual messages into per-topic batches which are then pushed to Google Cloud Pub/Sub at a specified desired request concurrency level in order to achieve both low-latency and high throughput.
+The publisher is implemented on top of the async Pub/Sub client and concurrently gathers individual messages into per-topic batches which are then pushed to Google Cloud Pub/Sub at a specified desired request maxConcurrency level in order to achieve both low-latency and high throughput.
 
 Why
 ---
@@ -63,7 +63,7 @@ final Pubsub pubsub = Pubsub.builder()
 final Publisher publisher = Publisher.builder()
     .pubsub(pubsub)
     .project("my-google-cloud-project")
-    .concurrency(128)
+    .maxConcurrency(128)
     .build();
 
 // A never ending stream of messages...
@@ -88,7 +88,7 @@ final Puller puller = builder()
     .pubsub(pubsub)
     .project("my-google-cloud-project")
     .subscription("my-subscription")
-    .concurrency(32)
+    .maxConcurrency(32)
     .messageHandler(handler)
     .build();
 ```

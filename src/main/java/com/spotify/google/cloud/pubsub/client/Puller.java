@@ -16,82 +16,24 @@
 
 package com.spotify.google.cloud.pubsub.client;
 
-import com.google.common.util.concurrent.MoreExecutors;
-
-import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.Objects;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
 
-public class Puller implements Closeable {
-  /**
-   * A handler for received messages.
-   */
-  public interface MessageHandler {
-
-    /**
-     * Called when a {@link Puller} receives a message.
-     *
-     * @param puller       The {@link Puller}
-     * @param subscription The subscription that the message was received on.
-     * @param message      The message.
-     * @param ackId        The ack id.
-     * @return A future that should be completed with the ack id when the message has been consumed.
-     */
-    CompletionStage<String> handleMessage(Puller puller, String subscription, Message message, String ackId);
-  }
+public class Puller extends AbstractPuller {
 
   private static final Logger log = LoggerFactory.getLogger(Puller.class);
 
-  private final ScheduledExecutorService scheduler =
-      MoreExecutors.getExitingScheduledExecutorService(new ScheduledThreadPoolExecutor(1));
-
-  private final Acker acker;
-
-  private final Pubsub pubsub;
-  private final String project;
-  private final String subscription;
-  private final MessageHandler handler;
-  private final int concurrency;
-  private final int batchSize;
-  private final int maxOutstandingMessages;
-  private final int maxAckQueueSize;
   private final long pullIntervalMillis;
 
-  private final AtomicInteger outstandingRequests = new AtomicInteger();
-  private final AtomicInteger outstandingMessages = new AtomicInteger();
-
   public Puller(final Builder builder) {
-    this.pubsub = Objects.requireNonNull(builder.pubsub, "pubsub");
-    this.project = Objects.requireNonNull(builder.project, "project");
-    this.subscription = Objects.requireNonNull(builder.subscription, "subscription");
-    this.handler = Objects.requireNonNull(builder.handler, "handler");
-    this.concurrency = builder.concurrency;
-    this.batchSize = builder.batchSize;
-    this.maxOutstandingMessages = builder.maxOutstandingMessages;
-    this.maxAckQueueSize = builder.maxAckQueueSize;
+    super(builder.pubsub, builder.project,
+          builder.subscription, builder.handler, builder.concurrency,
+          builder.batchSize, builder.maxOutstandingMessages, builder.maxAckQueueSize);
     this.pullIntervalMillis = builder.pullIntervalMillis;
 
-    // Set up a batching acker for sending acks
-    this.acker = Acker.builder()
-        .pubsub(pubsub)
-        .project(project)
-        .subscription(subscription)
-        .batchSize(batchSize)
-        .concurrency(concurrency)
-        .queueSize(maxAckQueueSize)
-        .build();
+    log.info("Starting PubSub Puller");
 
     // Start pulling
     pull();
@@ -100,104 +42,16 @@ public class Puller implements Closeable {
     scheduler.scheduleWithFixedDelay(this::pull, pullIntervalMillis, pullIntervalMillis, MILLISECONDS);
   }
 
-  @Override
-  public void close() throws IOException {
-    scheduler.shutdownNow();
-    try {
-      scheduler.awaitTermination(30, SECONDS);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-    }
-  }
-
-  public int maxAckQueueSize() {
-    return maxAckQueueSize;
-  }
-
-  public int maxOutstandingMessages() {
-    return maxOutstandingMessages;
-  }
-
-  public int outstandingMessages() {
-    return outstandingMessages.get();
-  }
-
-  public int concurrency() {
-    return concurrency;
-  }
-
-  public int outstandingRequests() {
-    return outstandingRequests.get();
-  }
-
-  public int batchSize() {
-    return batchSize;
-  }
-
-  public String subscription() {
-    return subscription;
-  }
-
-  public String project() {
-    return project;
-  }
-
   public long pullIntervalMillis() {
     return pullIntervalMillis;
   }
 
-  private void pull() {
-    while (outstandingRequests.get() < concurrency &&
-           outstandingMessages.get() < maxOutstandingMessages) {
-      pullBatch();
+  @Override
+  protected void pull() {
+    while (this.outstandingRequests() < maxConcurrency &&
+           outstandingMessages.get()-batchSize < maxOutstandingMessages) {
+      pullBatch(true);
     }
-  }
-
-  private void pullBatch() {
-    outstandingRequests.incrementAndGet();
-
-    pubsub.pull(project, subscription, true, batchSize)
-        .whenComplete((messages, ex) -> {
-
-          outstandingRequests.decrementAndGet();
-          // Bail if pull failed
-          if (ex != null) {
-            log.error("Pull failed", ex);
-            return;
-          }
-
-          // Add entire batch to outstanding message count
-          outstandingMessages.addAndGet(messages.size());
-
-          // Call handler for each received message
-          for (final ReceivedMessage message : messages) {
-            final CompletionStage<String> handlerFuture;
-            try {
-              handlerFuture = handler.handleMessage(this, subscription, message.message(), message.ackId());
-            } catch (Exception e) {
-              outstandingMessages.decrementAndGet();
-              log.error("Message handler threw exception", e);
-              continue;
-            }
-
-            if (handlerFuture == null) {
-              outstandingMessages.decrementAndGet();
-              log.error("Message handler returned null");
-              continue;
-            }
-
-            // Decrement the number of outstanding messages when handling is complete
-            handlerFuture.whenComplete((ignore, throwable) -> outstandingMessages.decrementAndGet());
-
-            // Ack when the message handling successfully completes
-            handlerFuture.thenAccept(acker::acknowledge).exceptionally(throwable -> {
-              if (!(throwable instanceof CancellationException)) {
-                log.error("Acking pubsub threw exception", throwable);
-              }
-              return null;
-            });
-          }
-        });
   }
 
   /**
@@ -225,7 +79,7 @@ public class Puller implements Closeable {
     /**
      * Set the {@link Pubsub} client to use. The client will be closed when this {@link Puller} is closed.
      *
-     * <p>Note: The client should be configured to at least allow as many connections as the concurrency level of this
+     * <p>Note: The client should be configured to at least allow as many connections as the maxConcurrency level of this
      * {@link Puller}.</p>
      */
     public Builder pubsub(final Pubsub pubsub) {
@@ -258,7 +112,7 @@ public class Puller implements Closeable {
     }
 
     /**
-     * Set the Google Cloud Pub/Sub request concurrency level. Default is {@code 64}.
+     * Set the Google Cloud Pub/Sub request maxConcurrency level. Default is {@code 64}.
      */
     public Builder concurrency(final int concurrency) {
       this.concurrency = concurrency;
